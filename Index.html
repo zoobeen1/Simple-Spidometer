@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>GPS Спидометр Pro</title>
+    <style>
+        :root {
+            --bg: #0d0f12;
+            --card-bg: #161b22;
+            --text: #ffffff;
+            --sub-text: #8a99ad;
+            --accent: #00ff88;
+            --danger: #ff3b30;
+        }
+        body.light {
+            --bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --text: #1a212b;
+            --sub-text: #6e7f93;
+            --accent: #00aa55;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            text-align: center;
+            padding: 5px 0;
+            overflow-x: hidden;
+        }
+
+        .top-nav {
+            display: flex;
+            gap: 4px;
+            width: 96vw;
+            margin: 0 auto 4px;
+        }
+        .btn {
+            flex: 1;
+            padding: 8px 4px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .btn-active { background: var(--accent) !important; color: #000 !important; }
+        
+        .status-badge {
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--danger);
+            margin-bottom: 2px;
+        }
+
+        /* Экраны приложения */
+        .screen { display: block; }
+        .screen.hidden { display: none; }
+
+        .gauge-viewport {
+            position: relative;
+            width: 98vw;
+            height: 98vw;
+            max-width: 500px;
+            max-height: 500px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .gauge-svg { width: 100%; height: 100%; }
+
+        .gauge-bg-ring {
+            stroke-width: 10;
+            stroke-linecap: round;
+            transition: stroke 0.3s ease;
+            transform-origin: 190px 190px;
+            transform: rotate(150deg);
+        }
+
+        .needle {
+            stroke: var(--danger);
+            stroke-width: 6;
+            stroke-linecap: round;
+            transform-origin: 190px 190px;
+            transform: rotate(-120deg);
+            transition: transform 0.15s ease-out;
+        }
+        
+        .progress-ring {
+            stroke-width: 14;
+            stroke-linecap: round;
+            transform-origin: 190px 190px;
+            transform: rotate(150deg);
+            transition: stroke-dashoffset 0.15s ease-out, stroke 0.3s ease;
+        }
+
+        .speed-readout {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .speed-num {
+            font-size: 5.5rem;
+            font-weight: 900;
+            line-height: 0.85;
+            letter-spacing: -2px;
+        }
+        .speed-num.overspeed { color: var(--danger) !important; }
+        .speed-unit { font-size: 1.1rem; color: var(--sub-text); font-weight: bold; margin-top: 4px; }
+        
+        .compass-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 1rem;
+            color: var(--accent);
+            font-weight: bold;
+            margin-top: 6px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.03);
+        }
+        .compass-arrow-svg {
+            width: 26px;
+            height: 26px;
+            transition: transform 0.2s ease-out;
+            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
+        }
+
+        /* Отдельный большой экран компаса */
+        .compass-full-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 78vh;
+            width: 94vw;
+            max-width: 450px;
+            margin: 10px auto 0;
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 20px;
+        }
+        .compass-big-arrow {
+            width: 190px;
+            height: 190px;
+            transition: transform 0.2s ease-out;
+            filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.6));
+            margin: 20px 0;
+        }
+        .compass-big-dir {
+            font-size: 4.5rem;
+            font-weight: 900;
+            color: var(--accent);
+            line-height: 1;
+        }
+        .compass-big-deg {
+            font-size: 1.6rem;
+            color: var(--sub-text);
+            margin-top: 5px;
+            font-weight: bold;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            width: 94vw;
+            max-width: 450px;
+            margin: 10px auto 20px;
+            background: var(--card-bg);
+            padding: 10px;
+            border-radius: 12px;
+        }
+        .stat-val { font-size: 1.2rem; font-weight: bold; }
+        .stat-lbl { font-size: 0.7rem; color: var(--sub-text); text-transform: uppercase; }
+
+        .scroll-controls {
+            width: 94vw;
+            max-width: 450px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-bottom: 50px;
+        }
+        .panel-card {
+            background: var(--card-bg);
+            padding: 12px;
+            border-radius: 12px;
+            text-align: left;
+        }
+
+        .sim-drawer { display: none; flex-direction: column; gap: 8px; }
+        .sim-drawer.open { display: flex; }
+
+        .hud-mode { transform: scaleY(-1); }
+    </style>
+</head>
+<body>
+
+    <!-- Верхняя панель с тогл-кнопкой переключения режимов -->
+    <div class="top-nav">
+        <button class="btn btn-active" id="autoBtn">🚘 120</button>
+        <button class="btn" id="veloBtn">🚲 70</button>
+        <button class="btn" id="styleBtn">🧭 Стрелка</button>
+        <button class="btn" id="toggleScreenBtn" style="background:#243b30; color:var(--accent);">🧭 Компас</button>
+        <button class="btn" style="flex:0.3" id="themeBtn">🌙/☀️</button>
+    </div>
+
+    <div class="status-badge" id="gpsStatus">🔴 GPS выключен</div>
+
+    <!-- ЭКРАН 1: СПИДОМЕТР -->
+    <div class="screen" id="speedometerScreen">
+        <div class="gauge-viewport">
+            <svg class="gauge-svg" viewBox="0 0 380 380">
+                <circle cx="190" cy="190" r="165" fill="none" stroke="rgba(255,255,255,0.1)" class="gauge-bg-ring" id="bgRing" stroke-dasharray="691.15 1036.7" stroke-dashoffset="0"/>
+                
+                <circle cx="190" cy="190" r="165" fill="none" class="progress-ring" id="ring" stroke-dasharray="691.15 1036.7" stroke-dashoffset="691.15" style="display:none;"/>
+
+                <g id="ticks"></g>
+
+                <g id="needleGroup">
+                    <line x1="190" y1="190" x2="190" y2="40" class="needle" id="needle"/>
+                    <circle cx="190" cy="190" r="11" fill="var(--danger)"/>
+                </g>
+            </svg>
+
+            <div class="speed-readout">
+                <div class="speed-num" id="speedNum">0</div>
+                <div class="speed-unit">км/ч</div>
+                
+                <div class="compass-box" id="compassBox" title="Нажмите для калибровки компаса">
+                    <span id="compassModeIcon">🧲</span>
+                    <svg class="compass-arrow-svg" id="compassArrow" viewBox="0 0 100 100">
+                        <polygon points="50,5 68,50 50,42 32,50" fill="#ff3b30"/>
+                        <polygon points="50,95 68,50 50,42 32,50" fill="#ffffff"/>
+                    </svg>
+                    <span id="compassText">С (0°)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-bar">
+            <div>
+                <div class="stat-lbl">Максимальная</div>
+                <div class="stat-val" id="maxSpeed">0 км/ч</div>
+            </div>
+            <div>
+                <div class="stat-lbl">Дистанция</div>
+                <div class="stat-val" id="dist">0.0 км</div>
+            </div>
+        </div>
+
+        <div class="scroll-controls">
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-active" style="padding:14px; font-size:14px;" id="startGpsBtn">▶️ СТАРТ GPS</button>
+                <button class="btn" style="padding:14px; font-size:14px;" id="hudBtn">🪞 HUD</button>
+            </div>
+
+            <div class="panel-card" style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:13px; font-weight:bold;">⚠️ Лимит скорости:</span>
+                <input type="number" id="speedLimit" value="60" style="width:55px; padding:6px; border-radius:6px; border:none; text-align:center; font-weight:bold; font-size:14px;">
+                <button class="btn" style="background:var(--danger); color:#fff; padding:6px 12px;" id="resetBtn">🔄 Сброс</button>
+            </div>
+
+            <button class="btn" id="simToggleBtn">🕹️ Открыть Симулятор</button>
+
+            <div class="panel-card sim-drawer" id="simDrawer">
+                <input type="range" id="simSlider" min="0" max="120" value="0" style="width:100%;">
+                <div style="display:flex; gap:8px;">
+                    <button class="btn" style="background:var(--accent); color:#000; padding:12px;" id="gasBtn">ГАЗ 🔥</button>
+                    <button class="btn" style="background:var(--danger); color:#fff; padding:12px;" id="brakeBtn">ТОРМОЗ 🛑</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ЭКРАН 2: ОТДЕЛЬНЫЙ КРУПНЫЙ КОМПАС -->
+    <div class="screen hidden" id="compassScreen">
+        <div class="compass-full-container">
+            <div style="font-size: 0.9rem; color: var(--sub-text);" id="bigCompassSource">Источник: Магнитометр 🧲</div>
+            
+            <svg class="compass-big-arrow" id="bigCompassArrow" viewBox="0 0 100 100">
+                <polygon points="50,5 68,50 50,42 32,50" fill="#ff3b30"/>
+                <polygon points="50,95 68,50 50,42 32,50" fill="#ffffff"/>
+            </svg>
+
+            <div class="compass-big-dir" id="bigCompassDir">С</div>
+            <div class="compass-big-deg" id="bigCompassDeg">0°</div>
+        </div>
+    </div>
+
+    <script>
+        let watchId = null, maxSpd = 0, totalDist = 0, lastPos = null;
+        let maxScale = 120, simInt = null, wakeLock = null;
+        let isDigitalMode = false;
+        let currentSpeed = 0, gpsHeading = null, magHeading = null;
+
+        const $ = id => document.getElementById(id);
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {}
+        }
+
+        function enableCompassSensors() {
+            const onOrient = (e) => {
+                let heading = null;
+                if (e.webkitCompassHeading !== undefined) {
+                    heading = e.webkitCompassHeading;
+                } else if (e.alpha !== null) {
+                    heading = (360 - e.alpha) % 360;
+                }
+                
+                if (heading !== null && !isNaN(heading)) {
+                    magHeading = heading;
+                    renderCompass();
+                }
+            };
+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(res => {
+                    if (res === 'granted') window.addEventListener('deviceorientation', onOrient, true);
+                }).catch(()=>{});
+            } else if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', onOrient, true);
+            }
+        }
+
+        function calcBearing(lat1, lon1, lat2, lon2) {
+            const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+            const y = Math.sin(Δλ) * Math.cos(φ2);
+            const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
+
+        function renderCompass() {
+            let activeHeading = null;
+            let icon = '🧲';
+            let sourceName = 'Магнитометр 🧲';
+
+            if (currentSpeed >= 3 && gpsHeading !== null) {
+                activeHeading = gpsHeading;
+                icon = '📡';
+                sourceName = 'GPS Спутники 📡';
+            } else if (magHeading !== null) {
+                activeHeading = magHeading;
+                icon = '🧲';
+                sourceName = 'Магнитометр 🧲';
+            } else if (gpsHeading !== null) {
+                activeHeading = gpsHeading;
+                icon = '📍';
+                sourceName = 'GPS Спутники 📡';
+            }
+
+            if (activeHeading === null) return;
+
+            const dirs = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
+            const norm = (activeHeading % 360 + 360) % 360;
+            const idx = Math.round(norm / 45) % 8;
+
+            $('compassModeIcon').innerText = icon;
+            $('compassText').innerText = `${dirs[idx]} (${Math.round(norm)}°)`;
+            $('compassArrow').style.transform = `rotate(${norm}deg)`;
+
+            $('bigCompassArrow').style.transform = `rotate(${norm}deg)`;
+            $('bigCompassDir').innerText = dirs[idx];
+            $('bigCompassDeg').innerText = Math.round(norm) + '°';$('bigCompassSource').innerText = `Источник: ${sourceName}`;
+        }
+
+        function drawTicks() {
+            const group = $('ticks');
+            group.innerHTML = '';
+            const steps = maxScale / 10;
+            for (let i = 0; i <= steps; i++) {
+                const val = i * 10;
+                const angle = -120 + (i / steps) * 240;
+                const rad = (angle - 90) * Math.PI / 180;
+                
+                const x1 = 190 + 152 * Math.cos(rad), y1 = 190 + 152 * Math.sin(rad);
+                const x2 = 190 + 165 * Math.cos(rad), y2 = 190 + 165 * Math.sin(rad);
+                
+                group.innerHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--sub-text)" stroke-width="2"/>`;
+                
+                const tx = 190 + 132 * Math.cos(rad), ty = 190 + 132 * Math.sin(rad) + 5;
+                group.innerHTML += `<text x="${tx}" y="${ty}" fill="var(--text)" font-size="12" font-weight="bold" text-anchor="middle">${val}</text>`;
+            }
+        }
+
+        function getSpeedColor(ratio) {
+            let hue = (1 - ratio) * 120;
+            return `hsl(${hue}, 100%, 50%)`;
+        }
+
+        function setSpeed(val) {
+            currentSpeed = val;
+            $('speedNum').innerText = val;
+
+            if (val > maxSpd) {
+                maxSpd = val;
+                $('maxSpeed').innerText = maxSpd + ' км/ч';
+            }
+
+            const limit = parseInt($('speedLimit').value) || 999;
+            if (val >= limit && limit > 0) {
+                $('speedNum').classList.add('overspeed');
+            } else {
+                $('speedNum').classList.remove('overspeed');
+            }
+
+            const ratio = Math.min(val, maxScale) / maxScale;
+            const dynamicColor = getSpeedColor(ratio);
+
+            if (isDigitalMode) {
+                const arcLength = 691.15;
+                const offset = arcLength - (ratio * arcLength);
+                
+                const ring = $('ring');
+                ring.style.strokeDashoffset = offset;
+                ring.style.stroke = dynamicColor;
+            } else {
+                let angle = -120 + (ratio * 240);
+                $('needle').style.transform = `rotate(${angle}deg)`;
+                $('bgRing').style.stroke = val > 0 ? dynamicColor : 'rgba(255,255,255,0.1)';
+            }
+
+            renderCompass();
+        }
+
+        // Тогл-переключение экранов одной кнопкой в шапке
+        $('toggleScreenBtn').onclick = () => {
+            const isCompassVisible = !$('compassScreen').classList.contains('hidden');
+            if (isCompassVisible) {
+                // Переходим на спидометр
+                $('compassScreen').classList.add('hidden');
+                $('speedometerScreen').classList.remove('hidden');$('toggleScreenBtn').innerText = '🧭 Компас';
+            } else {
+                // Переходим на компас
+                $('speedometerScreen').classList.add('hidden');
+                $('compassScreen').classList.remove('hidden');$('toggleScreenBtn').innerText = '🚗 Спидометр';
+            }
+        };
+
+        $('styleBtn').onclick = () => {
+            isDigitalMode = !isDigitalMode;
+            if (isDigitalMode) {
+                $('needleGroup').style.display = 'none';
+                $('ring').style.display = 'block';$('ticks').style.display = 'none';
+                $('bgRing').style.stroke = 'rgba(255,255,255,0.1)';$('styleBtn').innerText = '🔢 Цифра';
+            } else {
+                $('needleGroup').style.display = 'block';$('ring').style.display = 'none';
+                $('ticks').style.display = 'block';$('styleBtn').innerText = '🧭 Стрелка';
+            }
+            setSpeed(parseInt($('simSlider').value));
+        };
+
+        $('resetBtn').onclick = () => {
+            maxSpd = 0; totalDist = 0;
+            $('maxSpeed').innerText = '0 км/ч';
+            $('dist').innerText = '0.0 км';
+        };
+
+        $('autoBtn').onclick = () => {
+            maxScale = 120; $('simSlider').max = 120;
+            $('autoBtn').className = 'btn btn-active';$('veloBtn').className = 'btn';
+            drawTicks(); setSpeed(parseInt($('simSlider').value));
+        };
+
+        $('veloBtn').onclick = () => {
+            maxScale = 70; $('simSlider').max = 70;
+            $('veloBtn').className = 'btn btn-active';$('autoBtn').className = 'btn';
+            drawTicks(); setSpeed(Math.min(parseInt($('simSlider').value), 70));
+        };
+
+        $('simToggleBtn').onclick = () => $('simDrawer').classList.toggle('open');$('simSlider').oninput = e => setSpeed(parseInt(e.target.value));
+
+        const hold = (btn, act) => {
+            btn.onmousedown = btn.ontouchstart = (e) => {
+                e.preventDefault();
+                clearInterval(simInt);
+                simInt = setInterval(act, 40);
+            };
+        };
+
+        hold($('gasBtn'), () => {
+            let v = parseInt($('simSlider').value);
+            if (v < maxScale) { 
+                v += 2;
+                $('simSlider').value = v; 
+                setSpeed(v); 
+                totalDist += (v / 3.6) * 0.04 * 1000;
+                $('dist').innerText = (totalDist / 1000).toFixed(1) + ' км';
+            }
+        });
+
+        hold($('brakeBtn'), () => {
+            let v = parseInt($('simSlider').value);
+            if (v > 0) { 
+                v -= 4;
+                if (v < 0) v = 0;
+                $('simSlider').value = v; 
+                setSpeed(v); 
+            }
+        });
+
+        window.onmouseup = window.ontouchend = () => clearInterval(simInt);
+
+        $('compassBox').onclick = enableCompassSensors;
+
+        $('startGpsBtn').onclick = () => {
+            enableCompassSensors();
+            if (watchId === null) {
+                if ('geolocation' in navigator) {
+                    requestWakeLock();
+                    $('gpsStatus').style.color = 'var(--accent)';$('gpsStatus').innerText = '🟡 Поиск спутников...';
+                    
+                    watchId = navigator.geolocation.watchPosition(
+                        pos => {
+                            let spd = Math.round((pos.coords.speed || 0) * 3.6);
+                            $('gpsStatus').style.color = 'var(--accent)';$('gpsStatus').innerText = `🟢 GPS активен (±${Math.round(pos.coords.accuracy)}м)`;
+                            
+                            $('simSlider').value = spd;
+                            setSpeed(spd);
+                            
+                            if (pos.coords.heading !== null && !isNaN(pos.coords.heading)) {
+                                gpsHeading = pos.coords.heading;
+                            }
+
+                            if (lastPos && pos.coords.accuracy < 25) {
+                                if (spd > 2) {
+                                    gpsHeading = calcBearing(
+                                        lastPos.coords.latitude, lastPos.coords.longitude,
+                                        pos.coords.latitude, pos.coords.longitude
+                                    );
+                                }
+
+                                const R = 6371e3;
+                                const φ1 = lastPos.coords.latitude * Math.PI / 180;
+                                const φ2 = pos.coords.latitude * Math.PI / 180;
+                                const Δφ = (pos.coords.latitude - lastPos.coords.latitude) * Math.PI / 180;
+                                const Δλ = (pos.coords.longitude - lastPos.coords.longitude) * Math.PI / 180;
+                                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                                const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                                if (d > 2) {
+                                    totalDist += d;
+                                    $('dist').innerText = (totalDist / 1000).toFixed(1) + ' км';
+                                }
+                            }
+                            lastPos = pos;
+                            renderCompass();
+                        },
+                        err => {
+                            $('gpsStatus').style.color = 'var(--danger)';$('gpsStatus').innerText = '🔴 Ошибка GPS';
+                        },
+                        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+                    );
+                    $('startGpsBtn').innerText = '⏹️ СТОП GPS';
+                    $('startGpsBtn').style.background = 'var(--danger)';$('startGpsBtn').style.color = '#fff';
+                }
+            } else {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                if (wakeLock) { wakeLock.release(); wakeLock = null; }
+                $('gpsStatus').style.color = 'var(--danger)';$('gpsStatus').innerText = '🔴 GPS выключен';
+                $('startGpsBtn').innerText = '▶️ СТАРТ GPS';
+                $('startGpsBtn').style.background = 'var(--accent)';$('startGpsBtn').style.color = '#000';
+            }
+        };
+
+        $('themeBtn').onclick = () => document.body.classList.toggle('light');
+
+        drawTicks();
+        setSpeed(0);
+    </script>
+</body>
+</html>
