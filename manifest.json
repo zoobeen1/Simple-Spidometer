@@ -1,1 +1,20 @@
-
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Simple GPS Speedometer",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "SimpleSpeedometr",
+  "start_url": "/",
+  "theme_color": "#ffffff",
+  "id": "JustSimpleSpeedometr",
+  "description": "Just Simple Speedometr",
+  "lang": "ru",
+  "categories": [
+    "cars"
+  ],
+  "display_override": [
+    "window-controls-overlay"
+  ]
+}
