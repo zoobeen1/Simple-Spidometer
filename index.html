@@ -158,6 +158,26 @@
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
         }
 
+        /* Кнопка «Стою в пробке» прямо в нижней мертвой зоне под спидометром */
+        #inertiaToggleBtn {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: none;
+            background: #ffaa00;
+            color: #000;
+            padding: 10px 18px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
         /* ==========================================
            4. ЭКРАН 2: ОТДЕЛЬНЫЙ ПОЛНОЭКРАННЫЙ КОМПАС
            ========================================== */
@@ -298,9 +318,12 @@
                     <span id="compassText">С (0°)</span>
                 </div>
             </div>
+
+            <!-- Кнопка ручного управления инерцией (парящая внизу внутри вьюпорта спидометра) -->
+            <button id="inertiaToggleBtn">🛑 Стою в пробке (Инерция ВКЛ)</button>
         </div>
 
-        <!-- Панель со статистикой поездки (Максимальная, Средняя скорость, и сплит дистанций) -->
+        <!-- Панель со статистикой поездки -->
         <div class="stats-bar">
             <div class="stat-card">
                 <div class="stat-lbl">Максимальная</div>
@@ -326,9 +349,6 @@
                 <button class="btn btn-active" style="padding:14px; font-size:14px;" id="startGpsBtn">▶️ СТАРТ GPS</button>
                 <button class="btn" style="padding:14px; font-size:14px;" id="hudBtn">🪞 HUD</button>
             </div>
-
-            <!-- Кнопка ручного управления инерцией при потере GPS -->
-            <button class="btn" id="inertiaToggleBtn" style="display:none; background:#ffaa00; color:#000; padding:12px; font-size:13px; font-weight:bold;">🛑 Стою в пробке (Инерция ВКЛ)</button>
 
             <div class="panel-card" style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:13px; font-weight:bold;">⚠️ Лимит скорости:</span>
@@ -383,7 +403,6 @@
         let isManualInertiaStopped = false; 
         let inertialCurrentSpeed = 0;
 
-        // Переменные для расчета фактической средней скорости
         let speedSum = 0;
         let speedCount = 0;
 
@@ -408,7 +427,7 @@
         $('inertiaToggleBtn').onclick = () => {
             isManualInertiaStopped = !isManualInertiaStopped;
             if (isManualInertiaStopped) {
-                $('inertiaToggleBtn').innerText = '🚗 Еду дальше (Возобновить расчет)';
+                $('inertiaToggleBtn').innerText = '🚗 Еду дальше';
                 $('inertiaToggleBtn').style.background = 'var(--accent)';$('inertiaToggleBtn').style.color = '#000';
                 inertialCurrentSpeed = 0;
                 setSpeed(0, true); 
@@ -522,7 +541,6 @@
                 $('maxSpeed').innerText = Math.round(maxSpd) + ' км/ч';
             }
 
-            // Учет фактической средней скорости (если едем > 0 и данные из реального GPS)
             if (val > 0 && !isSynthetic) {
                 speedSum += val;
                 speedCount++;
