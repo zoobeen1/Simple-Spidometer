@@ -38,9 +38,6 @@
             overflow-x: hidden;
         }
 
-        /* Отладочное табло (скрыто) */
-        /* #debugLog { ... } */
-
         /* ==========================================
            2. НАВИГАЦИЯ И ВЕРХНЯЯ ПАНЕЛЬ
            ========================================== */
@@ -158,7 +155,7 @@
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
         }
 
-        /* Кнопка «Стою в пробке» прямо в нижней мертвой зоне под спидометром */
+        /* Кнопка «Стою в пробке» внизу под спидометром */
         #inertiaToggleBtn {
             position: absolute;
             bottom: 12px;
@@ -319,7 +316,7 @@
                 </div>
             </div>
 
-            <!-- Кнопка ручного управления инерцией (парящая внизу внутри вьюпорта спидометра) -->
+            <!-- Кнопка ручного управления инерцией -->
             <button id="inertiaToggleBtn">🛑 Стою в пробке (Инерция ВКЛ)</button>
         </div>
 
@@ -408,11 +405,27 @@
 
         const $ = id => document.getElementById(id);
 
+        /* Надежная функция удержания экрана активным */
         async function requestWakeLock() {
-            try {
-                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
-            } catch (err) {}
+            if ('wakeLock' in navigator && watchId !== null) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        // Если замок сбросился системой в фоне, но GPS активен — запрашиваем заново
+                        if (watchId !== null) {
+                            requestWakeLock();
+                        }
+                    });
+                } catch (err) {}
+            }
         }
+
+        // Автоматически восстанавливаем Wake Lock, если пользователь переключился обратно на вкладку
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible' && watchId !== null) {
+                await requestWakeLock();
+            }
+        });
 
         function toggleFullScreen() {
             if (!document.fullscreenElement) {
@@ -684,7 +697,7 @@
 
             if (watchId === null) {
                 if ('geolocation' in navigator) {
-                    requestWakeLock();
+                    requestWakeLock(); // Запрашиваем блокировку экрана
                     $('gpsStatus').style.color = 'var(--accent)';$('gpsStatus').innerText = '🟡 Поиск спутников...';
                     
                     watchId = navigator.geolocation.watchPosition(
@@ -759,7 +772,10 @@
             } else {
                 navigator.geolocation.clearWatch(watchId);
                 watchId = null;
-                if (wakeLock) { wakeLock.release(); wakeLock = null; }
+                if (wakeLock) { 
+                    wakeLock.release().catch(() => {}); 
+                    wakeLock = null; 
+                }
                 $('gpsStatus').style.color = 'var(--danger)';$('gpsStatus').innerText = '🔴 GPS выключен';
                 $('inertiaToggleBtn').style.display = 'none';$('startGpsBtn').innerText = '▶️ СТАРТ GPS';
                 $('startGpsBtn').style.background = 'var(--accent)';$('startGpsBtn').style.color = '#000';
