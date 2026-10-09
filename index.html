@@ -36,7 +36,8 @@
         .top-nav {
             display: flex;
             gap: 4px;
-            width: 96vw;
+            width: 98vw;
+            max-width: 480px;
             margin: 0 auto 4px;
         }
         .btn {
@@ -66,10 +67,10 @@
 
         .gauge-viewport {
             position: relative;
-            width: 98vw;
-            height: 98vw;
-            max-width: 500px;
-            max-height: 500px;
+            width: 99vw;
+            height: 99vw;
+            max-width: 540px;
+            max-height: 540px;
             margin: 0 auto;
             display: flex;
             align-items: center;
@@ -110,13 +111,13 @@
             justify-content: center;
         }
         .speed-num {
-            font-size: 5.5rem;
+            font-size: 6rem;
             font-weight: 900;
             line-height: 0.85;
             letter-spacing: -2px;
         }
         .speed-num.overspeed { color: var(--danger) !important; }
-        .speed-unit { font-size: 1.1rem; color: var(--sub-text); font-weight: bold; margin-top: 4px; }
+        .speed-unit { font-size: 1.2rem; color: var(--sub-text); font-weight: bold; margin-top: 4px; }
         
         .compass-box {
             display: flex;
@@ -174,21 +175,24 @@
         }
 
         .stats-bar {
-            display: flex;
-            justify-content: space-around;
-            width: 94vw;
-            max-width: 450px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            width: 98vw;
+            max-width: 480px;
             margin: 10px auto 20px;
-            background: var(--card-bg);
-            padding: 10px;
-            border-radius: 12px;
         }
-        .stat-val { font-size: 1.2rem; font-weight: bold; }
-        .stat-lbl { font-size: 0.7rem; color: var(--sub-text); text-transform: uppercase; }
+        .stat-card {
+            background: var(--card-bg);
+            padding: 8px;
+            border-radius: 10px;
+        }
+        .stat-val { font-size: 1.1rem; font-weight: bold; }
+        .stat-lbl { font-size: 0.65rem; color: var(--sub-text); text-transform: uppercase; }
 
         .scroll-controls {
-            width: 94vw;
-            max-width: 450px;
+            width: 98vw;
+            max-width: 480px;
             margin: 0 auto;
             display: flex;
             flex-direction: column;
@@ -206,6 +210,17 @@
         .sim-drawer.open { display: flex; }
 
         .hud-mode { transform: scaleY(-1); }
+
+        /* Идеальный фиксированный горизонт */
+        @media (orientation: landscape) {
+            .gauge-viewport {
+                max-width: 500px;
+                max-height: 500px;
+            }
+            .top-nav, .stats-bar, .scroll-controls {
+                max-width: 450px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -225,14 +240,14 @@
     <div class="screen" id="speedometerScreen">
         <div class="gauge-viewport">
             <svg class="gauge-svg" viewBox="0 0 380 380">
-                <circle cx="190" cy="190" r="165" fill="none" stroke="rgba(255,255,255,0.1)" class="gauge-bg-ring" id="bgRing" stroke-dasharray="691.15 1036.7" stroke-dashoffset="0"/>
+                <circle cx="190" cy="190" r="178" fill="none" stroke="rgba(255,255,255,0.1)" class="gauge-bg-ring" id="bgRing" stroke-dasharray="746.13 1119.2" stroke-dashoffset="0"/>
                 
-                <circle cx="190" cy="190" r="165" fill="none" class="progress-ring" id="ring" stroke-dasharray="691.15 1036.7" stroke-dashoffset="691.15" style="display:none;"/>
+                <circle cx="190" cy="190" r="178" fill="none" class="progress-ring" id="ring" stroke-dasharray="746.13 1119.2" stroke-dashoffset="746.13" style="display:none;"/>
 
                 <g id="ticks"></g>
 
                 <g id="needleGroup">
-                    <line x1="190" y1="190" x2="190" y2="40" class="needle" id="needle"/>
+                    <line x1="190" y1="190" x2="190" y2="25" class="needle" id="needle"/>
                     <circle cx="190" cy="190" r="11" fill="var(--danger)"/>
                 </g>
             </svg>
@@ -253,13 +268,17 @@
         </div>
 
         <div class="stats-bar">
-            <div>
+            <div class="stat-card">
                 <div class="stat-lbl">Максимальная</div>
                 <div class="stat-val" id="maxSpeed">0 км/ч</div>
             </div>
-            <div>
-                <div class="stat-lbl">Дистанция</div>
+            <div class="stat-card">
+                <div class="stat-lbl">Дистанция (GPS)</div>
                 <div class="stat-val" id="dist">0.0 км</div>
+            </div>
+            <div class="stat-card" style="grid-column: span 2;">
+                <div class="stat-lbl">Дистанция (По таймеру/скорости)</div>
+                <div class="stat-val" id="timerDist">0.00 км</div>
             </div>
         </div>
 
@@ -303,7 +322,7 @@
     </div>
 
     <script>
-        let watchId = null, maxSpd = 0, totalDist = 0, lastPos = null;
+        let watchId = null, maxSpd = 0, totalDist = 0, timerDist = 0, lastPos = null;
         let maxScale = 120, simInt = null, wakeLock = null;
         let isDigitalMode = false;
         let currentSpeed = 0, gpsHeading = null, magHeading = null;
@@ -316,12 +335,26 @@
             } catch (err) {}
         }
 
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {});
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Автоматический запуск датчиков ориентации для магнитометра
         function enableCompassSensors() {
-            const onOrient = (e) => {
+            const handleOrientation = (e) => {
                 let heading = null;
+                // iOS / Safari
                 if (e.webkitCompassHeading !== undefined) {
                     heading = e.webkitCompassHeading;
-                } else if (e.alpha !== null) {
+                } 
+                // Android / Chrome (absolute orientation)
+                else if (e.alpha !== null) {
                     heading = (360 - e.alpha) % 360;
                 }
                 
@@ -331,14 +364,22 @@
                 }
             };
 
+            // Запрос разрешений для iOS 13+
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().then(res => {
-                    if (res === 'granted') window.addEventListener('deviceorientation', onOrient, true);
-                }).catch(()=>{});
-            } else if (window.DeviceOrientationEvent) {
-                window.addEventListener('deviceorientation', onOrient, true);
+                    if (res === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                    }
+                }).catch(() => {});
+            } else {
+                // Android и другие поддерживаемые браузеры
+                window.addEventListener('deviceorientation', handleOrientation, true);
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
             }
         }
+
+        // Пробуем запустить датчики сразу при загрузке страницы
+        window.addEventListener('load', enableCompassSensors);
 
         function calcBearing(lat1, lon1, lat2, lon2) {
             const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
@@ -391,12 +432,12 @@
                 const angle = -120 + (i / steps) * 240;
                 const rad = (angle - 90) * Math.PI / 180;
                 
-                const x1 = 190 + 152 * Math.cos(rad), y1 = 190 + 152 * Math.sin(rad);
-                const x2 = 190 + 165 * Math.cos(rad), y2 = 190 + 165 * Math.sin(rad);
+                const x1 = 190 + 162 * Math.cos(rad), y1 = 190 + 162 * Math.sin(rad);
+                const x2 = 190 + 178 * Math.cos(rad), y2 = 190 + 178 * Math.sin(rad);
                 
                 group.innerHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--sub-text)" stroke-width="2"/>`;
                 
-                const tx = 190 + 132 * Math.cos(rad), ty = 190 + 132 * Math.sin(rad) + 5;
+                const tx = 190 + 142 * Math.cos(rad), ty = 190 + 142 * Math.sin(rad) + 5;
                 group.innerHTML += `<text x="${tx}" y="${ty}" fill="var(--text)" font-size="12" font-weight="bold" text-anchor="middle">${val}</text>`;
             }
         }
@@ -424,12 +465,12 @@
 
             const ratio = Math.min(val, maxScale) / maxScale;
             const dynamicColor = getSpeedColor(ratio);
+            const arcLength = 746.13;
 
             if (isDigitalMode) {
-                const arcLength = 691.15;
                 const offset = arcLength - (ratio * arcLength);
-                
                 const ring = $('ring');
+                ring.style.strokeDasharray = `${arcLength} 1119.2`;
                 ring.style.strokeDashoffset = offset;
                 ring.style.stroke = dynamicColor;
             } else {
@@ -441,15 +482,21 @@
             renderCompass();
         }
 
-        // Тогл-переключение экранов одной кнопкой в шапке
+        // Таймер расстояния по скорости
+        setInterval(() => {
+            if (currentSpeed > 0) {
+                let metersPerSec = currentSpeed / 3.6;
+                timerDist += metersPerSec;
+                $('timerDist').innerText = (timerDist / 1000).toFixed(2) + ' км';
+            }
+        }, 1000);
+
         $('toggleScreenBtn').onclick = () => {
             const isCompassVisible = !$('compassScreen').classList.contains('hidden');
             if (isCompassVisible) {
-                // Переходим на спидометр
                 $('compassScreen').classList.add('hidden');
                 $('speedometerScreen').classList.remove('hidden');$('toggleScreenBtn').innerText = '🧭 Компас';
             } else {
-                // Переходим на компас
                 $('speedometerScreen').classList.add('hidden');
                 $('compassScreen').classList.remove('hidden');$('toggleScreenBtn').innerText = '🚗 Спидометр';
             }
@@ -469,9 +516,10 @@
         };
 
         $('resetBtn').onclick = () => {
-            maxSpd = 0; totalDist = 0;
+            maxSpd = 0; totalDist = 0; timerDist = 0;
             $('maxSpeed').innerText = '0 км/ч';
             $('dist').innerText = '0.0 км';
+            $('timerDist').innerText = '0.00 км';
         };
 
         $('autoBtn').onclick = () => {
@@ -502,8 +550,6 @@
                 v += 2;
                 $('simSlider').value = v; 
                 setSpeed(v); 
-                totalDist += (v / 3.6) * 0.04 * 1000;
-                $('dist').innerText = (totalDist / 1000).toFixed(1) + ' км';
             }
         });
 
@@ -519,10 +565,13 @@
 
         window.onmouseup = window.ontouchend = () => clearInterval(simInt);
 
+        // Дублируем вызов калибровки/активации по тапу на плашку компаса
         $('compassBox').onclick = enableCompassSensors;
 
         $('startGpsBtn').onclick = () => {
             enableCompassSensors();
+            toggleFullScreen();
+
             if (watchId === null) {
                 if ('geolocation' in navigator) {
                     requestWakeLock();
@@ -593,4 +642,5 @@
 </script>
 
 </body>
-    </html> 
+</html>
+
