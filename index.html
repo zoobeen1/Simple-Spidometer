@@ -8,6 +8,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>GPS Спидометр Pro</title>
     <style>
+        /* ==========================================
+           1. ПЕРЕМЕННЫЕ И ТЕМЫ ОФОРМЛЕНИЯ
+           ========================================== */
         :root {
             --bg: #0d0f12;
             --card-bg: #161b22;
@@ -33,6 +36,29 @@
             overflow-x: hidden;
         }
 
+        /* Отладочное табло (скрыто по умолчанию) */
+        #debugLog {
+            position: fixed;
+            top: 45px;
+            right: 5px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff88;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px;
+            border-radius: 6px;
+            text-align: left;
+            z-index: 9999;
+            max-width: 220px;
+            pointer-events: none;
+            border: 1px solid rgba(0,255,136,0.4);
+            display: none;
+        }
+        #debugLog.show { display: block; }
+
+        /* ==========================================
+           2. НАВИГАЦИЯ И ВЕРХНЯЯ ПАНЕЛЬ
+           ========================================== */
         .top-nav {
             display: flex;
             gap: 4px;
@@ -61,10 +87,13 @@
             margin-bottom: 2px;
         }
 
-        /* Экраны приложения */
+        /* Переключение экранов */
         .screen { display: block; }
         .screen.hidden { display: none; }
 
+        /* ==========================================
+           3. ВИЗУАЛИЗАЦИЯ СПИДОМЕТРА (SVG)
+           ========================================== */
         .gauge-viewport {
             position: relative;
             width: 99vw;
@@ -103,6 +132,7 @@
             transition: stroke-dashoffset 0.15s ease-out, stroke 0.3s ease;
         }
 
+        /* Текстовые табло скорости и компаса внутри шкалы */
         .speed-readout {
             position: absolute;
             display: flex;
@@ -136,11 +166,13 @@
         .compass-arrow-svg {
             width: 26px;
             height: 26px;
-            transition: transform 0.2s ease-out;
+            transition: transform 0.15s ease-out;
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
         }
 
-        /* Отдельный большой экран компаса */
+        /* ==========================================
+           4. ЭКРАН 2: ОТДЕЛЬНЫЙ КРУПНЫЙ КОМПАС
+           ========================================== */
         .compass-full-container {
             display: flex;
             flex-direction: column;
@@ -157,7 +189,7 @@
         .compass-big-arrow {
             width: 190px;
             height: 190px;
-            transition: transform 0.2s ease-out;
+            transition: transform 0.15s ease-out;
             filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.6));
             margin: 20px 0;
         }
@@ -174,6 +206,9 @@
             font-weight: bold;
         }
 
+        /* ==========================================
+           5. СТАТИСТИКА И ПАНЕЛЬ УПРАВЛЕНИЯ
+           ========================================== */
         .stats-bar {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -209,9 +244,9 @@
         .sim-drawer { display: none; flex-direction: column; gap: 8px; }
         .sim-drawer.open { display: flex; }
 
-        .hud-mode { transform: scaleY(-1); }
-
-        /* Идеальный фиксированный горизонт */
+        /* ==========================================
+           6. АДАПТИВНОСТЬ ДЛЯ ЛАНДШАФТНОГО РЕЖИМА
+           ========================================== */
         @media (orientation: landscape) {
             .gauge-viewport {
                 max-width: 500px;
@@ -225,38 +260,52 @@
 </head>
 <body>
 
-    <!-- Верхняя панель с тогл-кнопкой переключения режимов -->
+    <!-- Отладочное табло -->
+    <div id="debugLog">Ожидание данных датчиков...</div>
+
+    <!-- ==========================================
+         ВЕРХНЯЯ ПАНЕЛЬ ПЕРЕКЛЮЧЕНИЯ РЕЖИМОВ
+         ========================================== -->
     <div class="top-nav">
         <button class="btn btn-active" id="autoBtn">🚘 120</button>
         <button class="btn" id="veloBtn">🚲 70</button>
         <button class="btn" id="styleBtn">🧭 Стрелка</button>
         <button class="btn" id="toggleScreenBtn" style="background:#243b30; color:var(--accent);">🧭 Компас</button>
+        <button class="btn" id="debugToggleBtn" style="background:#3b2424; color:#ff8888; flex:0.7;">🐞 Отладка</button>
         <button class="btn" style="flex:0.3" id="themeBtn">🌙/☀️</button>
     </div>
 
+    <!-- Индикатор статуса геопозиции -->
     <div class="status-badge" id="gpsStatus">🔴 GPS выключен</div>
 
-    <!-- ЭКРАН 1: СПИДОМЕТР -->
+    <!-- ==========================================
+         ЭКРАН 1: ОСНОВНОЙ СПИДОМЕТР И МИНИ-КОМПАС
+         ========================================== -->
     <div class="screen" id="speedometerScreen">
         <div class="gauge-viewport">
             <svg class="gauge-svg" viewBox="0 0 380 380">
+                <!-- Фон шкалы (240 градусов) -->
                 <circle cx="190" cy="190" r="178" fill="none" stroke="rgba(255,255,255,0.1)" class="gauge-bg-ring" id="bgRing" stroke-dasharray="746.13 1119.2" stroke-dashoffset="0"/>
                 
+                <!-- Прогресс-бар для цифрового режима -->
                 <circle cx="190" cy="190" r="178" fill="none" class="progress-ring" id="ring" stroke-dasharray="746.13 1119.2" stroke-dashoffset="746.13" style="display:none;"/>
 
+                <!-- Деления шкалы (генерируются JS) -->
                 <g id="ticks"></g>
 
+                <!-- Стрелка спидометра -->
                 <g id="needleGroup">
                     <line x1="190" y1="190" x2="190" y2="25" class="needle" id="needle"/>
                     <circle cx="190" cy="190" r="11" fill="var(--danger)"/>
                 </g>
             </svg>
 
+            <!-- Блок цифровой скорости и компаса в центре -->
             <div class="speed-readout">
                 <div class="speed-num" id="speedNum">0</div>
                 <div class="speed-unit">км/ч</div>
                 
-                <div class="compass-box" id="compassBox" title="Нажмите для калибровки компаса">
+                <div class="compass-box" id="compassBox">
                     <span id="compassModeIcon">🧲</span>
                     <svg class="compass-arrow-svg" id="compassArrow" viewBox="0 0 100 100">
                         <polygon points="50,5 68,50 50,42 32,50" fill="#ff3b30"/>
@@ -267,6 +316,7 @@
             </div>
         </div>
 
+        <!-- Панель со статистикой поездки -->
         <div class="stats-bar">
             <div class="stat-card">
                 <div class="stat-lbl">Максимальная</div>
@@ -282,6 +332,7 @@
             </div>
         </div>
 
+        <!-- Элементы управления и симулятор -->
         <div class="scroll-controls">
             <div style="display:flex; gap:8px;">
                 <button class="btn btn-active" style="padding:14px; font-size:14px;" id="startGpsBtn">▶️ СТАРТ GPS</button>
@@ -306,7 +357,9 @@
         </div>
     </div>
 
-    <!-- ЭКРАН 2: ОТДЕЛЬНЫЙ КРУПНЫЙ КОМПАС -->
+    <!-- ==========================================
+         ЭКРАН 2: ОТДЕЛЬНЫЙ ПОЛНОЭКРАННЫЙ КОМПАС
+         ========================================== -->
     <div class="screen hidden" id="compassScreen">
         <div class="compass-full-container">
             <div style="font-size: 0.9rem; color: var(--sub-text);" id="bigCompassSource">Источник: Магнитометр 🧲</div>
@@ -321,13 +374,22 @@
         </div>
     </div>
 
+    <!-- ==========================================
+         ЛОГИКА И СКРИПТЫ ПРИЛОЖЕНИЯ
+         ========================================== -->
     <script>
         let watchId = null, maxSpd = 0, totalDist = 0, timerDist = 0, lastPos = null;
         let maxScale = 120, simInt = null, wakeLock = null;
         let isDigitalMode = false;
         let currentSpeed = 0, gpsHeading = null, magHeading = null;
+        let smoothedHeading = null;
+        let eventCounter = 0;
 
         const $ = id => document.getElementById(id);
+
+        function logDebug(msg) {
+            $('debugLog').innerText = msg;
+        }
 
         async function requestWakeLock() {
             try {
@@ -345,41 +407,43 @@
             }
         }
 
-        // Автоматический запуск датчиков ориентации для магнитометра
-        function enableCompassSensors() {
-            const handleOrientation = (e) => {
-                let heading = null;
-                // iOS / Safari
-                if (e.webkitCompassHeading !== undefined) {
-                    heading = e.webkitCompassHeading;
-                } 
-                // Android / Chrome (absolute orientation)
-                else if (e.alpha !== null) {
-                    heading = (360 - e.alpha) % 360;
+        $('debugToggleBtn').onclick = () => {$('debugLog').classList.toggle('show');
+        };
+
+        /* Абсолютный компас с инвертированным вращением под физику реального мира */
+        function initAndroidCompass() {
+            if (!window.DeviceOrientationEvent) {
+                logDebug("Нет DeviceOrientation");
+                return;
+            }
+
+            const handleHeading = (rawHeading) => {
+                if (rawHeading === null || isNaN(rawHeading)) return;
+                eventCounter++;
+
+                let targetHeading = (rawHeading + 360) % 360;
+
+                if (smoothedHeading === null) {
+                    smoothedHeading = targetHeading;
+                } else {
+                    let diff = targetHeading - (smoothedHeading % 360);
+                    if (diff > 180) diff -= 360;
+                    if (diff < -180) diff += 360;
+                    
+                    smoothedHeading += diff * 0.05;
                 }
-                
-                if (heading !== null && !isNaN(heading)) {
-                    magHeading = heading;
-                    renderCompass();
-                }
+
+                magHeading = smoothedHeading;
+                renderCompass();
+
+                let displayDeg = (smoothedHeading % 360 + 360) % 360;
+                logDebug(`Raw: ${rawHeading.toFixed(1)}\nSmooth: ${displayDeg.toFixed(1)}\nEvt: ${eventCounter}`);
             };
 
-            // Запрос разрешений для iOS 13+
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(res => {
-                    if (res === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation, true);
-                    }
-                }).catch(() => {});
-            } else {
-                // Android и другие поддерживаемые браузеры
-                window.addEventListener('deviceorientation', handleOrientation, true);
-                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-            }
+            window.addEventListener('deviceorientationabsolute', (e) => {
+                if (e.alpha !== null) handleHeading(e.alpha);
+            }, true);
         }
-
-        // Пробуем запустить датчики сразу при загрузке страницы
-        window.addEventListener('load', enableCompassSensors);
 
         function calcBearing(lat1, lon1, lat2, lon2) {
             const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
@@ -399,7 +463,7 @@
                 icon = '📡';
                 sourceName = 'GPS Спутники 📡';
             } else if (magHeading !== null) {
-                activeHeading = magHeading;
+                activeHeading = magHeading; 
                 icon = '🧲';
                 sourceName = 'Магнитометр 🧲';
             } else if (gpsHeading !== null) {
@@ -416,9 +480,11 @@
 
             $('compassModeIcon').innerText = icon;
             $('compassText').innerText = `${dirs[idx]} (${Math.round(norm)}°)`;
-            $('compassArrow').style.transform = `rotate(${norm}deg)`;
+            
+            /* Минус перед углом разворачивает вращение в правильную сторону */
+            $('compassArrow').style.transform = `rotate(${-activeHeading}deg)`;
+            $('bigCompassArrow').style.transform = `rotate(${-activeHeading}deg)`;
 
-            $('bigCompassArrow').style.transform = `rotate(${norm}deg)`;
             $('bigCompassDir').innerText = dirs[idx];
             $('bigCompassDeg').innerText = Math.round(norm) + '°';$('bigCompassSource').innerText = `Источник: ${sourceName}`;
         }
@@ -482,7 +548,6 @@
             renderCompass();
         }
 
-        // Таймер расстояния по скорости
         setInterval(() => {
             if (currentSpeed > 0) {
                 let metersPerSec = currentSpeed / 3.6;
@@ -546,30 +611,17 @@
 
         hold($('gasBtn'), () => {
             let v = parseInt($('simSlider').value);
-            if (v < maxScale) { 
-                v += 2;
-                $('simSlider').value = v; 
-                setSpeed(v); 
-            }
+            if (v < maxScale) { v += 2; $('simSlider').value = v; setSpeed(v); }
         });
 
         hold($('brakeBtn'), () => {
             let v = parseInt($('simSlider').value);
-            if (v > 0) { 
-                v -= 4;
-                if (v < 0) v = 0;
-                $('simSlider').value = v; 
-                setSpeed(v); 
-            }
+            if (v > 0) { v -= 4; if (v < 0) v = 0; $('simSlider').value = v; setSpeed(v); }
         });
 
         window.onmouseup = window.ontouchend = () => clearInterval(simInt);
 
-        // Дублируем вызов калибровки/активации по тапу на плашку компаса
-        $('compassBox').onclick = enableCompassSensors;
-
         $('startGpsBtn').onclick = () => {
-            enableCompassSensors();
             toggleFullScreen();
 
             if (watchId === null) {
@@ -634,13 +686,14 @@
 
         drawTicks();
         setSpeed(0);
+        initAndroidCompass();
     </script>
-<script>
-  if (typeof navigator.serviceWorker !== 'undefined') {
-    navigator.serviceWorker.register('/Simple-Spidometer/pwabuilder-sw.js');
-  }
-</script>
 
+    <script>
+      if (typeof navigator.serviceWorker !== 'undefined') {
+        navigator.serviceWorker.register('/Simple-Spidometer/pwabuilder-sw.js');
+      }
+    </script>
 </body>
 </html>
 
