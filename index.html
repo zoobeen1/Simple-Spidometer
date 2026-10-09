@@ -38,26 +38,8 @@
             overflow-x: hidden;
         }
 
-        /* Отладочное табло (скрыто и закомментировано)
-        #debugLog {
-            position: fixed;
-            top: 45px;
-            right: 5px;
-            background: rgba(0, 0, 0, 0.9);
-            color: #00ff88;
-            font-family: monospace;
-            font-size: 11px;
-            padding: 8px;
-            border-radius: 6px;
-            text-align: left;
-            z-index: 9999;
-            max-width: 220px;
-            pointer-events: none;
-            border: 1px solid rgba(0,255,136,0.4);
-            display: none;
-        }
-        #debugLog.show { display: block; }
-        */
+        /* Отладочное табло (скрыто) */
+        /* #debugLog { ... } */
 
         /* ==========================================
            2. НАВИГАЦИЯ И ВЕРХНЯЯ ПАНЕЛЬ
@@ -266,9 +248,6 @@
 </head>
 <body>
 
-    <!-- Отладочное табло (скрыто) -->
-    <!-- <div id="debugLog">Ожидание данных датчиков...</div> -->
-
     <!-- ==========================================
          ВЕРХНЯЯ ПАНЕЛЬ ПЕРЕКЛЮЧЕНИЯ РЕЖИМОВ
          ========================================== -->
@@ -277,7 +256,6 @@
         <button class="btn" id="veloBtn">🚲 70</button>
         <button class="btn" id="styleBtn">🧭 Стрелка</button>
         <button class="btn" id="toggleScreenBtn" style="background:#243b30; color:var(--accent);">🧭 Компас</button>
-        <!-- <button class="btn" id="debugToggleBtn" style="background:#3b2424; color:#ff8888; flex:0.7;">🐞 Отладка</button> -->
         <button class="btn" style="flex:0.3" id="themeBtn">🌙/☀️</button>
     </div>
 
@@ -322,18 +300,22 @@
             </div>
         </div>
 
-        <!-- Панель со статистикой поездки -->
+        <!-- Панель со статистикой поездки (Максимальная, Средняя скорость, и сплит дистанций) -->
         <div class="stats-bar">
             <div class="stat-card">
                 <div class="stat-lbl">Максимальная</div>
                 <div class="stat-val" id="maxSpeed">0 км/ч</div>
             </div>
             <div class="stat-card">
+                <div class="stat-lbl">Средняя скорость</div>
+                <div class="stat-val" id="avgSpeed">0 км/ч</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-lbl">Дистанция (GPS)</div>
                 <div class="stat-val" id="dist">0.0 км</div>
             </div>
-            <div class="stat-card" style="grid-column: span 2;">
-                <div class="stat-lbl">Дистанция (Инерция / Ручной режим)</div>
+            <div class="stat-card">
+                <div class="stat-lbl">Дистанция (Математика)</div>
                 <div class="stat-val" id="timerDist">0.00 км</div>
             </div>
         </div>
@@ -399,14 +381,13 @@
         let wasInTunnel = false;
         let isGpsLost = false;
         let isManualInertiaStopped = false; 
+        let inertialCurrentSpeed = 0;
 
-        let inertialCurrentSpeed = 0; 
+        // Переменные для расчета фактической средней скорости
+        let speedSum = 0;
+        let speedCount = 0;
 
         const $ = id => document.getElementById(id);
-
-        function logDebug(msg) {
-            // $('debugLog').innerText = msg;
-        }
 
         async function requestWakeLock() {
             try {
@@ -423,11 +404,6 @@
                 }
             }
         }
-
-        /* Кнопка отладки скрыта
-        $('debugToggleBtn').onclick = () => {$('debugLog').classList.toggle('show');
-        };
-        */
 
         $('inertiaToggleBtn').onclick = () => {
             isManualInertiaStopped = !isManualInertiaStopped;
@@ -463,9 +439,6 @@
 
                 magHeading = smoothedHeading;
                 renderCompass();
-
-                let displayDeg = (smoothedHeading % 360 + 360) % 360;
-                logDebug(`Raw: ${rawHeading.toFixed(1)}\nSmooth: ${displayDeg.toFixed(1)}\nEvt: ${eventCounter}`);
             };
 
             window.addEventListener('deviceorientationabsolute', (e) => {
@@ -547,6 +520,14 @@
             if (val > maxSpd && !isSynthetic) {
                 maxSpd = val;
                 $('maxSpeed').innerText = Math.round(maxSpd) + ' км/ч';
+            }
+
+            // Учет фактической средней скорости (если едем > 0 и данные из реального GPS)
+            if (val > 0 && !isSynthetic) {
+                speedSum += val;
+                speedCount++;
+                let avg = Math.round(speedSum / speedCount);
+                $('avgSpeed').innerText = avg + ' км/ч';
             }
 
             const limit = parseInt($('speedLimit').value) || 999;
@@ -638,8 +619,10 @@
         };
 
         $('resetBtn').onclick = () => {
-            maxSpd = 0; totalDist = 0; timerDist = 0; activeSpeedHistory = []; wasInTunnel = false; isManualInertiaStopped = false; inertialCurrentSpeed = 0;
+            maxSpd = 0; totalDist = 0; timerDist = 0; speedSum = 0; speedCount = 0;
+            activeSpeedHistory = []; wasInTunnel = false; isManualInertiaStopped = false; inertialCurrentSpeed = 0;
             $('inertiaToggleBtn').style.display = 'none';$('maxSpeed').innerText = '0 км/ч';
+            $('avgSpeed').innerText = '0 км/ч';
             $('dist').innerText = '0.0 км';
             $('timerDist').innerText = '0.00 км';
         };
