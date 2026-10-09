@@ -18,7 +18,7 @@
             --sub-text: #8a99ad;
             --accent: #00ff88;
             --danger: #ff3b30;
-            --inertia: #ffaa00; /* Цвет для инерционной (вымышленной) скорости */
+            --inertia: #ffaa00;
         }
         body.light {
             --bg: #f0f2f5;
@@ -150,7 +150,7 @@
             transition: color 0.3s ease;
         }
         .speed-num.overspeed { color: var(--danger) !important; }
-        .speed-num.inertia-speed { color: var(--inertia) !important; } /* Стиль для вымышленной скорости */
+        .speed-num.inertia-speed { color: var(--inertia) !important; }
         
         .speed-unit { font-size: 1.2rem; color: var(--sub-text); font-weight: bold; margin-top: 4px; }
         
@@ -176,7 +176,7 @@
         }
 
         /* ==========================================
-           4. ЭКРАН 2: ОТДЕЛЬНЫЙ КРУПНЫЙ КОМПАС
+           4. ЭКРАН 2: ОТДЕЛЬНЫЙ ПОЛНОЭКРАННЫЙ КОМПАС
            ========================================== */
         .compass-full-container {
             display: flex;
@@ -399,6 +399,9 @@
         let isGpsLost = false;
         let isManualInertiaStopped = false; 
 
+        // Переменные для плавного перехода скорости
+        let inertialCurrentSpeed = 0; 
+
         const $ = id => document.getElementById(id);
 
         function logDebug(msg) {
@@ -429,6 +432,7 @@
             if (isManualInertiaStopped) {
                 $('inertiaToggleBtn').innerText = '🚗 Еду дальше (Возобновить расчет)';
                 $('inertiaToggleBtn').style.background = 'var(--accent)';$('inertiaToggleBtn').style.color = '#000';
+                inertialCurrentSpeed = 0;
                 setSpeed(0, true); 
             } else {
                 $('inertiaToggleBtn').innerText = '🛑 Стою в пробке (Инерция ВКЛ)';
@@ -534,14 +538,13 @@
             return `hsl(${hue}, 100%, 50%)`;
         }
 
-        /* Функция отображения скорости (с поддержкой инерционного режима) */
         function setSpeed(val, isSynthetic = false) {
             currentSpeed = val;
-            $('speedNum').innerText = val;
+            $('speedNum').innerText = Math.round(val);
 
             if (val > maxSpd && !isSynthetic) {
                 maxSpd = val;
-                $('maxSpeed').innerText = maxSpd + ' км/ч';
+                $('maxSpeed').innerText = Math.round(maxSpd) + ' км/ч';
             }
 
             const limit = parseInt($('speedLimit').value) || 999;
@@ -552,7 +555,7 @@
             if (val >= limit && limit > 0) {
                 speedNumEl.classList.add('overspeed');
             } else if (isSynthetic) {
-                speedNumEl.classList.add('inertia-speed'); // Окрашиваем в оранжевый (инерционный) цвет
+                speedNumEl.classList.add('inertia-speed');
             }
 
             const ratio = Math.min(val, maxScale) / maxScale;
@@ -574,7 +577,7 @@
             renderCompass();
         }
 
-        /* Таймер проверки потери GPS и вывода инерционной скорости */
+        /* Таймер с плавной интерполяцией (наращиванием) к усредненной инерционной скорости */
         setInterval(() => {
             const now = Date.now();
             if (watchId !== null && lastGpsTimestamp > 0) {
@@ -587,14 +590,19 @@
 
                     if (isManualInertiaStopped) {
                         $('gpsStatus').style.color = 'var(--danger)';$('gpsStatus').innerText = '🛑 Нет GPS (Ручная пауза в пробке)';
+                        inertialCurrentSpeed = 0;
                         setSpeed(0, true);
                     } else {
                         $('gpsStatus').style.color = '#ffaa00';
                         $('gpsStatus').innerText = '🔄 Нет GPS (Инерция по ср. скор.)';
 
                         if (activeSpeedHistory.length > 0) {
-                            let avgSpd = Math.round(activeSpeedHistory.reduce((a, b) => a + b, 0) / activeSpeedHistory.length);
-                            setSpeed(avgSpd, true); // Передаем флаг, что скорость вымышленная (инерционная)
+                            let targetAvgSpd = activeSpeedHistory.reduce((a, b) => a + b, 0) / activeSpeedHistory.length;
+                            
+                            // Плавное приближение текущей скорости к целевой средней (интерполяция)
+                            inertialCurrentSpeed += (targetAvgSpd - inertialCurrentSpeed) * 0.1;
+                            
+                            setSpeed(inertialCurrentSpeed, true);
                         }
                     }
                 }
@@ -632,7 +640,7 @@
         };
 
         $('resetBtn').onclick = () => {
-            maxSpd = 0; totalDist = 0; timerDist = 0; activeSpeedHistory = []; wasInTunnel = false; isManualInertiaStopped = false;
+            maxSpd = 0; totalDist = 0; timerDist = 0; activeSpeedHistory = []; wasInTunnel = false; isManualInertiaStopped = false; inertialCurrentSpeed = 0;
             $('inertiaToggleBtn').style.display = 'none';$('maxSpeed').innerText = '0 км/ч';
             $('dist').innerText = '0.0 км';
             $('timerDist').innerText = '0.00 км';
@@ -695,6 +703,7 @@
                             $('inertiaToggleBtn').style.color = '#000';
 
                             let spd = Math.round((pos.coords.speed || 0) * 3.6);
+                            inertialCurrentSpeed = spd; // Синхронизируем базовую инерционную скорость с реальной
                             
                             $('gpsStatus').style.color = 'var(--accent)';$('gpsStatus').innerText = `🟢 GPS активен (±${Math.round(pos.coords.accuracy)}м)`;
                             
@@ -704,7 +713,7 @@
                             }
 
                             $('simSlider').value = spd;
-                            setSpeed(spd); // Обычный реальный GPS режим (белые/цветные цифры)
+                            setSpeed(spd);
                             
                             if (pos.coords.heading !== null && !isNaN(pos.coords.heading)) {
                                 gpsHeading = pos.coords.heading;
